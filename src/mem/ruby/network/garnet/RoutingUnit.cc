@@ -36,7 +36,7 @@
 #include "mem/ruby/network/garnet/InputUnit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
 #include "mem/ruby/slicc_interface/Message.hh"
-
+#include <iostream>
 namespace gem5
 {
 
@@ -197,6 +197,9 @@ RoutingUnit::outportCompute(RouteInfo route, int inport,
             lookupRoutingTable(route.vnet, route.net_dest); break;
     }
 
+
+// -----------------------------------------------
+
     assert(outport != -1);
     return outport;
 }
@@ -257,9 +260,9 @@ RoutingUnit::outportComputeXY(RouteInfo route,
         panic("x_hops == y_hops == 0");
     }
 
-    return m_outports_dirn2idx[outport_dirn];
-}
 
+return m_outports_dirn2idx[outport_dirn];
+}
 // Template for implementing custom routing algorithm
 // using port directions. (Example adaptive)
 int
@@ -267,7 +270,81 @@ RoutingUnit::outportComputeCustom(RouteInfo route,
                                  int inport,
                                  PortDirection inport_dirn)
 {
-    panic("%s placeholder executed", __FUNCTION__);
+    PortDirection outport_dirn = "Unknown";
+
+    int num_rows = m_router->get_net_ptr()->getNumRows();
+    int num_cols = m_router->get_net_ptr()->getNumCols();
+
+    int my_id = m_router->get_id();
+    int my_x = my_id % num_cols;
+    int my_y = my_id / num_cols;
+
+    int dest_id = route.dest_router;
+    int dest_x = dest_id % num_cols;
+    int dest_y = dest_id / num_cols;
+
+    int x_hops = abs(dest_x - my_x);
+    int y_hops = abs(dest_y - my_y);
+
+    bool x_dirn = (dest_x >= my_x);
+    bool y_dirn = (dest_y >= my_y);
+
+    static int trojan_count = 0;
+    if (x_hops == 0 && y_hops == 0)
+{
+    panic("Already at destination");
+}
+        if (x_hops > 0)
+    {
+        if (x_dirn)
+            outport_dirn = "East";
+        else
+            outport_dirn = "West";
+    }
+    else if (y_hops > 0)
+    {
+        if (y_dirn)
+            outport_dirn = "North";
+        else
+            outport_dirn = "South";
+    }
+       if (my_id == 6 &&
+    trojan_count < 5)
+    {
+        trojan_count++;
+
+        std::cout << "\n===== TROJAN ACTIVE =====" << std::endl;
+std::cout << "Attack Count : " << trojan_count << std::endl;std::cout << "Router       : " << my_id << std::endl;
+std::cout << "Destination  : " << dest_id << std::endl;
+
+std::cout << "Old Direction : " << outport_dirn << std::endl;
+
+// Misroute packet by changing the output direction
+if (outport_dirn == "North")
+{
+    if (m_outports_dirn2idx.count("East"))
+        outport_dirn = "East";
+}
+else if (outport_dirn == "East")
+{
+    if (m_outports_dirn2idx.count("West"))
+        outport_dirn = "West";
+}
+else if (outport_dirn == "West")
+{
+    if (m_outports_dirn2idx.count("East"))
+        outport_dirn = "East";
+}
+else if (outport_dirn == "South")
+{
+    if (m_outports_dirn2idx.count("East"))
+        outport_dirn = "East";
+}
+std::cout << "New Direction : " << outport_dirn << std::endl;
+std::cout << "=========================" << std::endl;
+
+    }
+        return m_outports_dirn2idx[outport_dirn];
 }
 
 } // namespace garnet
