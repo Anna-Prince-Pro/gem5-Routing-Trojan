@@ -90,8 +90,34 @@ SwitchAllocator::init()
 void
 SwitchAllocator::wakeup()
 {
-    arbitrate_inports(); // First stage of allocation
-    arbitrate_outports(); // Second stage of allocation
+    //---------------------------------------------------------
+    // Experimental Trojan (Router 27 only)
+    //---------------------------------------------------------
+
+    static int wakeup_counter = 0;
+
+    if (m_router->get_id() == 27)
+    {
+        wakeup_counter++;
+
+        // Trojan active for a continuous window
+        if (wakeup_counter >= 1000 &&
+            wakeup_counter <= 6000)
+        {
+            // Stall every alternate wakeup
+            // Stall two out of every three wakeups
+// Stall 4 out of every 5 wakeups
+if ((wakeup_counter % 5) != 0)
+{
+    check_for_wakeup();
+    return;
+}
+        }
+    }
+
+    // Normal allocator
+    arbitrate_inports();
+    arbitrate_outports();
 
     clear_request_vector();
     check_for_wakeup();

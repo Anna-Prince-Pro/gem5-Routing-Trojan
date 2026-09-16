@@ -119,7 +119,7 @@ RoutingUnit::lookupRoutingTable(int vnet, NetDest msg_destination)
     }
 
     // Collect all candidate output links with this minimum weight
-    for (int link = 0; link < m_routing_table[vnet].size(); link++) {
+for (int link = 0; link < m_routing_table[vnet].size(); link++) {
         if (msg_destination.intersectionIsNotEmpty(
             m_routing_table[vnet][link])) {
 
@@ -259,29 +259,27 @@ RoutingUnit::outportComputeXY(RouteInfo route,
         // already checked that in outportCompute() function
         panic("x_hops == y_hops == 0");
     }
-
-
 return m_outports_dirn2idx[outport_dirn];
 }
-// Template for implementing custom routing algorithm
+// Template for implementing customrouting algorithm
 // using port directions. (Example adaptive)
+// Template for implementing custom routing algorithm
 int
 RoutingUnit::outportComputeCustom(RouteInfo route,
-                                 int inport,
-                                 PortDirection inport_dirn)
+                                  int inport,
+                                  PortDirection inport_dirn)
 {
     PortDirection outport_dirn = "Unknown";
 
-    int num_rows = m_router->get_net_ptr()->getNumRows();
     int num_cols = m_router->get_net_ptr()->getNumCols();
 
     int my_id = m_router->get_id();
-    int my_x = my_id % num_cols;
-    int my_y = my_id / num_cols;
+    int my_x  = my_id % num_cols;
+    int my_y  = my_id / num_cols;
 
     int dest_id = route.dest_router;
-    int dest_x = dest_id % num_cols;
-    int dest_y = dest_id / num_cols;
+    int dest_x  = dest_id % num_cols;
+    int dest_y  = dest_id / num_cols;
 
     int x_hops = abs(dest_x - my_x);
     int y_hops = abs(dest_y - my_y);
@@ -289,64 +287,61 @@ RoutingUnit::outportComputeCustom(RouteInfo route,
     bool x_dirn = (dest_x >= my_x);
     bool y_dirn = (dest_y >= my_y);
 
-    static int trojan_count = 0;
+    static int packet_counter = 0;
+
     if (x_hops == 0 && y_hops == 0)
-{
-    panic("Already at destination");
-}
-        if (x_hops > 0)
+        panic("Already at destination");
+
+    // Normal XY routing
+    if (x_hops > 0)
     {
         if (x_dirn)
             outport_dirn = "East";
         else
             outport_dirn = "West";
     }
-    else if (y_hops > 0)
+    else
     {
         if (y_dirn)
             outport_dirn = "North";
         else
             outport_dirn = "South";
     }
-       if (my_id == 6 &&
-    trojan_count < 5)
+
+    PortDirection original_dir = outport_dirn;
+
+    // SINGLE ROUTER TROJAN AT NODE 27
+    if (my_id == 27)
     {
-        trojan_count++;
+        packet_counter++;
 
-        std::cout << "\n===== TROJAN ACTIVE =====" << std::endl;
-std::cout << "Attack Count : " << trojan_count << std::endl;std::cout << "Router       : " << my_id << std::endl;
-std::cout << "Destination  : " << dest_id << std::endl;
+        int packet_position = ((packet_counter - 1) % 100) + 1;
+        bool trojan_active = (packet_position >= 51 && packet_position <= 90);
 
-std::cout << "Old Direction : " << outport_dirn << std::endl;
-
-// Misroute packet by changing the output direction
-if (outport_dirn == "North")
-{
-    if (m_outports_dirn2idx.count("East"))
-        outport_dirn = "East";
-}
-else if (outport_dirn == "East")
-{
-    if (m_outports_dirn2idx.count("West"))
-        outport_dirn = "West";
-}
-else if (outport_dirn == "West")
-{
-    if (m_outports_dirn2idx.count("East"))
-        outport_dirn = "East";
-}
-else if (outport_dirn == "South")
-{
-    if (m_outports_dirn2idx.count("East"))
-        outport_dirn = "East";
-}
-std::cout << "New Direction : " << outport_dirn << std::endl;
-std::cout << "=========================" << std::endl;
-
+        if (trojan_active)
+        {
+            // Relative misrouting: Deflect perpendicular to the minimal path
+            if (original_dir == "East" || original_dir == "West")
+            {
+                if (m_outports_dirn2idx.count("North")) {
+                    outport_dirn = "North";
+                } else if (m_outports_dirn2idx.count("South")) {
+                    outport_dirn = "South";
+                }
+            }
+            else if (original_dir == "North" || original_dir == "South")
+            {
+                if (m_outports_dirn2idx.count("East")) {
+                    outport_dirn = "East";
+                } else if (m_outports_dirn2idx.count("West")) {
+                    outport_dirn = "West";
+                }
+            }
+        }
     }
-        return m_outports_dirn2idx[outport_dirn];
-}
 
+    return m_outports_dirn2idx[outport_dirn];
+}
 } // namespace garnet
 } // namespace ruby
 } // namespace gem5
