@@ -204,9 +204,13 @@ RoutingUnit::outportCompute(RouteInfo route, int inport,
     return outport;
 }
 
-// XY routing implemented using port directions
-// Only for reference purpose in a Mesh
-// By default Garnet uses the routing table
+// XY routing implemented using port directions Only for reference
+//purpose in a Mesh By default Garnet uses the
+// routing table Template for implementing
+// customrouting algorithm using port directions. (Example adaptive)
+// Template for implementing custom routing algorithm
+
+
 int
 RoutingUnit::outportComputeXY(RouteInfo route,
                               int inport,
@@ -214,56 +218,61 @@ RoutingUnit::outportComputeXY(RouteInfo route,
 {
     PortDirection outport_dirn = "Unknown";
 
-    [[maybe_unused]] int num_rows = m_router->get_net_ptr()->getNumRows();
-    int num_cols = m_router->get_net_ptr()->getNumCols();
-    assert(num_rows > 0 && num_cols > 0);
+    // Four-router square-loop Trojan
+    if (route.trojan_hijacked) {
+        const int my_id = m_router->get_id();
+        const int dest_id = route.dest_router;
 
-    int my_id = m_router->get_id();
-    int my_x = my_id % num_cols;
-    int my_y = my_id / num_cols;
-
-    int dest_id = route.dest_router;
-    int dest_x = dest_id % num_cols;
-    int dest_y = dest_id / num_cols;
-
-    int x_hops = abs(dest_x - my_x);
-    int y_hops = abs(dest_y - my_y);
-
-    bool x_dirn = (dest_x >= my_x);
-    bool y_dirn = (dest_y >= my_y);
-
-    // already checked that in outportCompute() function
-    assert(!(x_hops == 0 && y_hops == 0));
-
-    if (x_hops > 0) {
-        if (x_dirn) {
-            assert(inport_dirn == "Local" || inport_dirn == "West");
-            outport_dirn = "East";
-        } else {
-            assert(inport_dirn == "Local" || inport_dirn == "East");
+        if (my_id == 5 && dest_id == 4) {
             outport_dirn = "West";
-        }
-    } else if (y_hops > 0) {
-        if (y_dirn) {
-            // "Local" or "South" or "West" or "East"
-            assert(inport_dirn != "North");
+        } else if (my_id == 4 && dest_id == 12) {
             outport_dirn = "North";
-        } else {
-            // "Local" or "North" or "West" or "East"
-            assert(inport_dirn != "South");
+        } else if (my_id == 12 && dest_id == 13) {
+            outport_dirn = "East";
+        } else if (my_id == 13 && dest_id == 5) {
             outport_dirn = "South";
+        } else {
+            panic("Trojan loop: invalid router/destination pair");
         }
-    } else {
-        // x_hops == 0 and y_hops == 0
-        // this is not possible
-        // already checked that in outportCompute() function
-        panic("x_hops == y_hops == 0");
+
+        auto it = m_outports_dirn2idx.find(outport_dirn);
+        if (it == m_outports_dirn2idx.end()) {
+            panic("Trojan loop: requested output direction unavailable");
+        }
+
+        return it->second;
     }
-return m_outports_dirn2idx[outport_dirn];
+
+    // Normal XY routing
+    const int num_cols = m_router->get_net_ptr()->getNumCols();
+
+    const int my_id = m_router->get_id();
+    const int my_x = my_id % num_cols;
+    const int my_y = my_id / num_cols;
+
+    const int dest_id = route.dest_router;
+    const int dest_x = dest_id % num_cols;
+    const int dest_y = dest_id / num_cols;
+
+    if (dest_x > my_x) {
+        outport_dirn = "East";
+    } else if (dest_x < my_x) {
+        outport_dirn = "West";
+    } else if (dest_y > my_y) {
+        outport_dirn = "North";
+    } else if (dest_y < my_y) {
+        outport_dirn = "South";
+    } else {
+        panic("XY routing: source router is already at destination");
+    }
+
+    auto it = m_outports_dirn2idx.find(outport_dirn);
+    if (it == m_outports_dirn2idx.end()) {
+        panic("XY routing: requested output direction unavailable");
+    }
+
+    return it->second;
 }
-// Template for implementing customrouting algorithm
-// using port directions. (Example adaptive)
-// Template for implementing custom routing algorithm
 int
 RoutingUnit::outportComputeCustom(RouteInfo route,
                                   int inport,

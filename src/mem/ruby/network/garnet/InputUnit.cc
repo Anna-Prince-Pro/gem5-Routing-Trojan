@@ -34,7 +34,8 @@
 #include "debug/RubyNetwork.hh"
 #include "mem/ruby/network/garnet/Credit.hh"
 #include "mem/ruby/network/garnet/Router.hh"
-
+// Shared packet counter for Router 5 across all input ports
+static int router5_packet_count = 0;
 namespace gem5
 {
 
@@ -80,9 +81,72 @@ InputUnit::wakeup()
     if (m_in_link->isReady(curTick())) {
 
         t_flit = m_in_link->consumeLink();
-        DPRINTF(RubyNetwork, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
+
+        // Check which experiment we are running
+        int routing_algo = m_router->get_net_ptr()->getRoutingAlgorithm();
+// --- FOUR-ROUTER SQUARE-LOOP TROJAN ---
+
+bool is_head_flit =
+    (t_flit->get_type() == HEAD_ ||
+     t_flit->get_type() == HEAD_TAIL_);
+
+if (routing_algo == 1 && is_head_flit) {
+    int current_router = m_router->get_id();
+
+    // Count each new packet only when its head reaches Router 5.
+    if (current_router == 5 && !t_flit->m_was_hijacked) {
+        router5_packet_count++;
+    }
+
+    // Packet positions repeat: 1..100, then 1..100 again.
+    int packet_position = router5_packet_count > 0
+        ? ((router5_packet_count - 1) % 100) + 1
+        : 0;
+
+    bool led_on =
+        (packet_position >= 51 && packet_position <= 90);
+
+    // Capture the original destination and hijack eligible packets.
+    if (current_router == 5 &&
+        !t_flit->m_was_hijacked && led_on) {
+
+        t_flit->m_original_dest_router =
+            t_flit->m_route.dest_router;
+        t_flit->m_original_dest_ni =
+            t_flit->m_route.dest_ni;
+
+        t_flit->m_is_hijacked = true;
+        t_flit->m_was_hijacked = true;
+    }
+
+    // Continue looping while active; restore the destination when OFF.
+    if (t_flit->m_is_hijacked) {
+        if (!led_on) {
+            t_flit->m_route.dest_router =
+                t_flit->m_original_dest_router;
+            t_flit->m_route.dest_ni =
+                t_flit->m_original_dest_ni;
+
+            t_flit->m_is_hijacked = false;
+        } else {
+            if (current_router == 5) {
+                t_flit->m_route.dest_router = 4;
+            } else if (current_router == 4) {
+                t_flit->m_route.dest_router = 12;
+            } else if (current_router == 12) {
+                t_flit->m_route.dest_router = 13;
+            } else if (current_router == 13) {
+                t_flit->m_route.dest_router = 5;
+            }
+        }
+    }
+}
+// --- END FOUR-ROUTER SQUARE-LOOP TROJAN ---
+
+    DPRINTF(RubyNetwork, "Router[%d] Consuming:%s Width: %d Flit:%s\n",
         m_router->get_id(), m_in_link->name(),
         m_router->getBitWidth(), *t_flit);
+
         assert(t_flit->m_width == m_router->getBitWidth());
         int vc = t_flit->get_vc();
         t_flit->increment_hops(); // for stats
@@ -93,43 +157,31 @@ InputUnit::wakeup()
             assert(virtualChannels[vc].get_state() == IDLE_);
             set_vc_active(vc, curTick());
 
-            // Route computation for this vc
-            int outport = m_router->route_compute(t_flit->get_route(),
-                m_id, m_direction);
+// Pass the Trojan state to routing without changing the stored route.
+RouteInfo route = t_flit->get_route();
+route.trojan_hijacked = t_flit->m_is_hijacked;
 
-            // Update output port in VC
-            // All flits in this packet will use this output port
-            // The output port field in the flit is updated after it wins SA
+int outport = m_router->route_compute(
+    route, m_id, m_direction);
             grant_outport(vc, outport);
 
         } else {
             assert(virtualChannels[vc].get_state() == ACTIVE_);
         }
 
-
-        // Buffer the flit
         virtualChannels[vc].insertFlit(t_flit);
 
         int vnet = vc/m_vc_per_vnet;
-        // number of writes same as reads
-        // any flit that is written will be read only once
         m_num_buffer_writes[vnet]++;
         m_num_buffer_reads[vnet]++;
 
         Cycles pipe_stages = m_router->get_pipe_stages();
         if (pipe_stages == 1) {
-            // 1-cycle router
-            // Flit goes for SA directly
             t_flit->advance_stage(SA_, curTick());
         } else {
             assert(pipe_stages > 1);
-            // Router delay is modeled by making flit wait in buffer for
-            // (pipe_stages cycles - 1) cycles before going for SA
-
             Cycles wait_time = pipe_stages - Cycles(1);
             t_flit->advance_stage(SA_, m_router->clockEdge(wait_time));
-
-            // Wakeup the router in that cycle to perform SA
             m_router->schedule_wakeup(Cycles(wait_time));
         }
 
@@ -138,7 +190,6 @@ InputUnit::wakeup()
         }
     }
 }
-
 // Send a credit back to upstream router for this VC.
 // Called by SwitchAllocator when the flit in this VC wins the Switch.
 void

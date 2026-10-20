@@ -27,7 +27,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-
 #ifndef __MEM_RUBY_NETWORK_GARNET_0_FLIT_HH__
 #define __MEM_RUBY_NETWORK_GARNET_0_FLIT_HH__
 
@@ -50,6 +49,12 @@ namespace garnet
 class flit
 {
   public:
+    int m_original_dest_router;
+bool m_is_hijacked;
+int m_loop_count;
+bool m_was_hijacked = false;
+int m_original_dest_ni;
+RouteInfo m_route;
     flit() {}
     flit(int packet_id, int id, int vc, int vnet, RouteInfo route, int size,
          MsgPtr msg_ptr, int MsgSize, uint32_t bWidth, Tick curTime);
@@ -120,7 +125,6 @@ class flit
     int m_id;
     int m_vnet;
     int m_vc;
-    RouteInfo m_route;
     int m_size;
     Tick m_enqueue_time, m_dequeue_time;
     Tick m_time;
@@ -129,6 +133,7 @@ class flit
     int m_outport;
     Tick src_delay;
     std::pair<flit_stage, Tick> m_stage;
+
 };
 
 inline std::ostream&

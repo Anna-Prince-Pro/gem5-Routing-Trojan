@@ -55,11 +55,10 @@ enum RoutingAlgorithm { TABLE_ = 0, XY_ = 1, CUSTOM_ = 2,
 
 struct RouteInfo
 {
-    RouteInfo()
-        : vnet(0), src_ni(0), src_router(0), dest_ni(0), dest_router(0),
-          hops_traversed(0)
-    {}
-
+RouteInfo()
+    : vnet(0), src_ni(0), src_router(0), dest_ni(0), dest_router(0),
+      hops_traversed(0), trojan_hijacked(false)
+{}
     // destination format for table-based routing
     int vnet;
     NetDest net_dest;
@@ -70,6 +69,8 @@ struct RouteInfo
     int dest_ni;
     int dest_router;
     int hops_traversed;
+    // Identifies packets currently following the Trojan loop
+bool trojan_hijacked;
 };
 
 #define INFINITE_ 10000
